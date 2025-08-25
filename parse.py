@@ -1,9 +1,11 @@
+#!/usr/bin/env python3
+
 from collections.abc import Generator
 from enum import Enum, auto
 from sys import exit
 from typing import Tuple
 
-WS = [' ', '0x20', '0x0A', '0x0D', '0x09']
+WS = [' ', '\u0020', '\u000A', '\u000D', '\u0009']
 
 class Term(Enum):
     pass
@@ -18,14 +20,19 @@ class Terminal(Term):
     RBRAC = auto()
     COLON = auto()
     COMMA = auto()
-    NUMB = auto()
+    MINUS = auto()
+    PLUS = auto()
+    PERIOD = auto()
+    ZERO = auto()
+    ONE_NINE = auto()
     STRING = auto()
+    EXPONENT = auto()
     BOOLEAN = auto()
     NULL = auto()
     INVALID = auto()
     END = auto()
     VALUE_STRING = auto()
-    VALUE_NUMB = auto()
+    VALUE_NUMBER = auto()
     VALUE_BOOLEAN = auto()
     VALUE_NULL = auto()
     EMPTY = auto()
@@ -36,16 +43,32 @@ class Terminal(Term):
 
 class NonTerminal(Rule):
     """Non Terminals used during syntatical analysis."""
-    JSON = auto()
     ELEMENT = auto()
     ELEMENTS = auto()
     ELEMENTS_TAIL = auto()
     VALUE = auto()
     VALUE_OBJECT = auto()
     VALUE_ARRAY = auto()
+    VALUE_NUMBER = auto()
     MEMBER = auto()
     MEMBERS = auto()
     MEMBERS_TAIL = auto()
+    FRACTION = auto()
+    FRACTION_TAIL = auto()
+    EXPONENT = auto()
+    SIGN = auto()
+    SIGN_PLUS = auto()
+    SIGN_MINUS = auto()
+    INTEGER = auto()
+    INTEGER_DIGIT = auto()
+    INTEGER_ONE_NINE = auto()
+    INTEGER_MINUS = auto()
+    INTEGER_MINUS_TAIL = auto()
+    INTEGER_MINUS_DIGIT = auto()
+    INTEGER_MINUS_ONE_NINE = auto()
+    DIGIT = auto()
+    DIGITS = auto()
+
 
     def __str__(self):
         return f"T_{self.name}"
@@ -67,15 +90,6 @@ class Lexer():
 
         return curr_str
 
-    def parse_number(self) -> int:
-        curr_numb = ""
-
-        while self.input_string[self.idx].isnumeric():
-            curr_numb += self.input_string[self.idx]
-            self.idx += 1
-
-        return int(curr_numb)
-
     def lexical_analysis(self) -> Generator[Tuple[Terminal,object]]:
 
         print("Lexical Analysis (LEXXER)")
@@ -87,7 +101,11 @@ class Lexer():
             elif c == '"':
                 yield (Terminal.STRING, self.parse_string())
             elif c.isnumeric():
-                yield (Terminal.NUMB, self.parse_number())
+                self.idx += 1
+                if c == '0':
+                    yield (Terminal.ZERO, c)
+                else:
+                    yield (Terminal.ONE_NINE, c)
             elif c in ["t", "f", "n"]:
                 if self.input_string[self.idx:self.idx + 4] == "true":
                     self.idx += 4
@@ -117,6 +135,16 @@ class Lexer():
                         yield (Terminal.COLON, None)
                     case ',':
                         yield (Terminal.COMMA, None)
+                    case '-':
+                        yield (Terminal.MINUS, None)
+                    case '+':
+                        yield (Terminal.PLUS, None)
+                    case '.':
+                        yield (Terminal.PERIOD, None)
+                    case 'e':
+                        yield (Terminal.EXPONENT, None)
+                    case 'E':
+                        yield (Terminal.EXPONENT, None)
                     case _:
                         print("got invalid input ", c)
                         exit(1)
@@ -155,18 +183,20 @@ class SyntaticalAnalysis():
 
     def __init__(self):
         self.table = {
-            NonTerminal.JSON: {Terminal.LCUR: NonTerminal.VALUE},
             NonTerminal.ELEMENT: {
                 Terminal.STRING: NonTerminal.VALUE,
                 Terminal.BOOLEAN: NonTerminal.VALUE,
-                Terminal.NULL: Terminal.VALUE_NULL,
-                Terminal.NUMB: NonTerminal.VALUE,
-                Terminal.LCUR: NonTerminal.VALUE_OBJECT,
-                Terminal.LBRAC: NonTerminal.VALUE_ARRAY,
+                Terminal.NULL: NonTerminal.VALUE,
+                Terminal.MINUS: NonTerminal.VALUE,
+                Terminal.ZERO: NonTerminal.VALUE,
+                Terminal.ONE_NINE: NonTerminal.VALUE,
+                Terminal.LCUR: NonTerminal.VALUE,
+                Terminal.LBRAC: NonTerminal.VALUE,
             },
             NonTerminal.ELEMENTS: {
                 Terminal.STRING: NonTerminal.ELEMENTS,
-                Terminal.NUMB: NonTerminal.ELEMENTS,
+                Terminal.ZERO: NonTerminal.ELEMENTS,
+                Terminal.ONE_NINE: NonTerminal.ELEMENTS,
                 Terminal.LCUR: NonTerminal.ELEMENTS,
                 Terminal.COMMA: NonTerminal.ELEMENTS_TAIL,
                 Terminal.RBRAC: Terminal.EMPTY
@@ -180,7 +210,9 @@ class SyntaticalAnalysis():
                 Terminal.LBRAC: NonTerminal.VALUE_ARRAY,
                 Terminal.BOOLEAN: Terminal.VALUE_BOOLEAN,
                 Terminal.STRING: Terminal.VALUE_STRING,
-                Terminal.NUMB: Terminal.VALUE_NUMB,
+                Terminal.MINUS: NonTerminal.VALUE_NUMBER,
+                Terminal.ZERO: NonTerminal.VALUE_NUMBER,
+                Terminal.ONE_NINE: NonTerminal.VALUE_NUMBER,
                 Terminal.NULL: Terminal.VALUE_NULL,
             },
             NonTerminal.VALUE_ARRAY: {
@@ -196,10 +228,51 @@ class SyntaticalAnalysis():
                 Terminal.RCUR: Terminal.EMPTY,
             },
             NonTerminal.MEMBER: {Terminal.STRING: NonTerminal.MEMBER},
+            NonTerminal.INTEGER: {
+                NonTerminal.DIGIT: NonTerminal.INTEGER_DIGIT,
+                Terminal.ONE_NINE: NonTerminal.INTEGER_ONE_NINE,
+                Terminal.MINUS: NonTerminal.INTEGER_MINUS,
+            },
+            NonTerminal.INTEGER_MINUS_TAIL: {
+                Terminal.ONE_NINE: NonTerminal.INTEGER_MINUS_ONE_NINE,
+            },
+            NonTerminal.DIGITS: {
+                Terminal.ZERO: NonTerminal.INTEGER_DIGIT,
+                Terminal.ONE_NINE: NonTerminal.INTEGER_DIGIT,
+                Terminal.PERIOD: Terminal.EMPTY,
+                Terminal.COMMA: Terminal.EMPTY,
+                Terminal.RCUR: Terminal.EMPTY,
+                Terminal.RBRAC: Terminal.EMPTY,
+                Terminal.EXPONENT: Terminal.EMPTY,
+                Terminal.END: Terminal.EMPTY,
+            },
+            NonTerminal.DIGIT: {
+                Terminal.ZERO: Terminal.ZERO,
+                Terminal.ONE_NINE: Terminal.ONE_NINE,
+            },
+            NonTerminal.FRACTION: {
+                Terminal.PERIOD: NonTerminal.FRACTION_TAIL,
+                Terminal.COMMA: Terminal.EMPTY,
+                Terminal.RCUR: Terminal.EMPTY,
+                Terminal.RBRAC: Terminal.EMPTY,
+                Terminal.EXPONENT: Terminal.EMPTY,
+                Terminal.END: Terminal.EMPTY,
+            },
+            NonTerminal.EXPONENT: {
+                Terminal.EXPONENT: NonTerminal.EXPONENT,
+                Terminal.COMMA: Terminal.EMPTY,
+                Terminal.RCUR: Terminal.EMPTY,
+                Terminal.RBRAC: Terminal.EMPTY,
+                Terminal.END: Terminal.EMPTY,
+            },
+            NonTerminal.SIGN: {
+                Terminal.ZERO: Terminal.EMPTY,
+                Terminal.ONE_NINE: Terminal.EMPTY,
+                Terminal.MINUS: NonTerminal.SIGN_MINUS,
+                Terminal.PLUS: NonTerminal.SIGN_PLUS,
+            },
         }
         self.rules = {
-            NonTerminal.JSON: [NonTerminal.ELEMENT],
-
             NonTerminal.ELEMENT: [NonTerminal.VALUE],
             NonTerminal.ELEMENTS: [NonTerminal.ELEMENT, NonTerminal.ELEMENTS_TAIL],
             NonTerminal.ELEMENTS_TAIL: [Terminal.COMMA, NonTerminal.ELEMENT, NonTerminal.ELEMENTS_TAIL],
@@ -212,13 +285,28 @@ class SyntaticalAnalysis():
             NonTerminal.VALUE_OBJECT: [Terminal.LCUR, NonTerminal.MEMBERS, Terminal.RCUR],
             NonTerminal.VALUE_ARRAY: [Terminal.LBRAC, NonTerminal.ELEMENTS, Terminal.RBRAC],
 
+            NonTerminal.VALUE_NUMBER: [NonTerminal.INTEGER, NonTerminal.FRACTION, NonTerminal.EXPONENT],
+            NonTerminal.INTEGER_DIGIT: [NonTerminal.DIGIT, NonTerminal.DIGITS],
+            NonTerminal.INTEGER_ONE_NINE: [Terminal.ONE_NINE, NonTerminal.DIGITS],
+            NonTerminal.INTEGER_MINUS: [Terminal.MINUS, NonTerminal.INTEGER_MINUS_TAIL],
+            NonTerminal.INTEGER_MINUS_DIGIT: [NonTerminal.DIGIT],
+            NonTerminal.INTEGER_MINUS_ONE_NINE: [Terminal.ONE_NINE, NonTerminal.DIGITS],
+            NonTerminal.FRACTION_TAIL: [Terminal.PERIOD, NonTerminal.DIGITS],
+            NonTerminal.EXPONENT: [Terminal.EXPONENT, NonTerminal.SIGN, NonTerminal.DIGITS],
+
+            NonTerminal.SIGN_MINUS: [Terminal.MINUS],
+            NonTerminal.SIGN_PLUS: [Terminal.PLUS],
+
+            Terminal.ZERO: [Terminal.ZERO],
+            Terminal.ONE_NINE: [Terminal.ONE_NINE],
+
             Terminal.VALUE_STRING: [Terminal.STRING],
             Terminal.VALUE_BOOLEAN: [Terminal.BOOLEAN],
-            Terminal.VALUE_NUMB: [Terminal.NUMB],
+            Terminal.VALUE_NUMBER: [NonTerminal.DIGITS],
             Terminal.VALUE_NULL: [Terminal.NULL],
             Terminal.EMPTY: [],
         }
-        self.stack = [Terminal.END, NonTerminal.JSON]
+        self.stack = [Terminal.END, NonTerminal.ELEMENT]
 
         ###
         ### TODO: review above rules and table
@@ -250,12 +338,18 @@ class SyntaticalAnalysis():
             print(*self.stack, sep=", ")
 
 
-contents = []
-with open("simple_example.json") as f:
-    contents = f.read()
-    print(contents)
+class JSON_Parser():
+    @staticmethod
+    def parse(raw_json : str) -> bool:
+        my_lexer = Lexer(raw_json)
+        my_syntax_analyzer = SyntaticalAnalysis()
 
-my_lexer = Lexer(contents)
-my_syntax_analyzer = SyntaticalAnalysis()
+        print(my_syntax_analyzer.run(list(my_lexer.lexical_analysis())))
+        return True
 
-print(my_syntax_analyzer.run(list(my_lexer.lexical_analysis())))
+if __name__ == "__main__":
+    contents = []
+    with open("./simple_example.json") as f:
+        contents = f.read()
+        print(contents)
+    JSON_Parser.parse(contents)
