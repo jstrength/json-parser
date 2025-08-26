@@ -2,8 +2,12 @@
 
 from collections.abc import Generator
 from enum import Enum, auto
-from sys import exit
 from typing import Tuple
+import logging
+import sys
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 WS = [' ', '\u0020', '\u000A', '\u000D', '\u0009']
 
@@ -25,7 +29,9 @@ class Terminal(Term):
     PERIOD = auto()
     ZERO = auto()
     ONE_NINE = auto()
-    STRING = auto()
+    CHAR = auto()
+    QUOTE = auto()
+    BACKSLASH = auto()
     EXPONENT = auto()
     BOOLEAN = auto()
     NULL = auto()
@@ -68,6 +74,9 @@ class NonTerminal(Rule):
     INTEGER_MINUS_ONE_NINE = auto()
     DIGIT = auto()
     DIGITS = auto()
+    STRING = auto()
+    CHARS = auto()
+    CHARS_TAIL = auto()
 
 
     def __str__(self):
@@ -92,63 +101,34 @@ class Lexer():
 
     def lexical_analysis(self) -> Generator[Tuple[Terminal,object]]:
 
-        print("Lexical Analysis (LEXXER)")
+        logger.debug("Lexical Analysis (LEXXER)")
 
         while self.idx < len(self.input_string):
             c = self.input_string[self.idx]
             if c in WS + ['\n']:
                 self.idx += 1  # ignore
-            elif c == '"':
-                yield (Terminal.STRING, self.parse_string())
             elif c.isnumeric():
                 self.idx += 1
                 if c == '0':
                     yield (Terminal.ZERO, c)
                 else:
                     yield (Terminal.ONE_NINE, c)
-            elif c in ["t", "f", "n"]:
-                if self.input_string[self.idx:self.idx + 4] == "true":
-                    self.idx += 4
-                    yield (Terminal.BOOLEAN, True)
-                elif self.input_string[self.idx:self.idx + 5] == "false":
-                    self.idx += 5
-                    yield (Terminal.BOOLEAN, False)
-                elif self.input_string[self.idx:self.idx + 4] == "null":
-                    self.idx += 4
-                    yield (Terminal.NULL, None)
-                else:
-                    print("got invalid input ", c)
-                    exit(1)
-                    yield (Terminal.INVALID, None)
-            else:
+            elif len(self.input_string)-self.idx > 3 and self.input_string[self.idx:self.idx + 4] == "true":
+                self.idx += 4
+                yield (Terminal.BOOLEAN, True)
+            elif len(self.input_string)-self.idx > 4 and self.input_string[self.idx:self.idx + 5] == "false":
+                self.idx += 5
+                yield (Terminal.BOOLEAN, False)
+            elif len(self.input_string)-self.idx > 3 and self.input_string[self.idx:self.idx + 4] == "null":
+                self.idx += 4
+                yield (Terminal.NULL, None)
+            elif c >= '\u0020' and c <= '\U0010FFFF':
                 self.idx += 1
-                match c:
-                    case '{':
-                        yield (Terminal.LCUR, None)
-                    case '}':
-                        yield (Terminal.RCUR, None)
-                    case '[':
-                        yield (Terminal.LBRAC, None)
-                    case ']':
-                        yield (Terminal.RBRAC, None)
-                    case ':':
-                        yield (Terminal.COLON, None)
-                    case ',':
-                        yield (Terminal.COMMA, None)
-                    case '-':
-                        yield (Terminal.MINUS, None)
-                    case '+':
-                        yield (Terminal.PLUS, None)
-                    case '.':
-                        yield (Terminal.PERIOD, None)
-                    case 'e':
-                        yield (Terminal.EXPONENT, None)
-                    case 'E':
-                        yield (Terminal.EXPONENT, None)
-                    case _:
-                        print("got invalid input ", c)
-                        exit(1)
-                        yield (Terminal.INVALID, None)
+                yield (Terminal.CHAR, c)
+            else:
+                logger.debug(f"got invalid input {c}")
+                sys.exit(1)
+                yield (Terminal.INVALID, None)
         yield (Terminal.END, None)
 
 
@@ -184,9 +164,9 @@ class SyntaticalAnalysis():
     def __init__(self):
         self.table = {
             NonTerminal.ELEMENT: {
-                Terminal.STRING: NonTerminal.VALUE,
                 Terminal.BOOLEAN: NonTerminal.VALUE,
                 Terminal.NULL: NonTerminal.VALUE,
+                Terminal.QUOTE: NonTerminal.VALUE,
                 Terminal.MINUS: NonTerminal.VALUE,
                 Terminal.ZERO: NonTerminal.VALUE,
                 Terminal.ONE_NINE: NonTerminal.VALUE,
@@ -194,7 +174,7 @@ class SyntaticalAnalysis():
                 Terminal.LBRAC: NonTerminal.VALUE,
             },
             NonTerminal.ELEMENTS: {
-                Terminal.STRING: NonTerminal.ELEMENTS,
+                Terminal.CHAR: NonTerminal.ELEMENTS,
                 Terminal.ZERO: NonTerminal.ELEMENTS,
                 Terminal.ONE_NINE: NonTerminal.ELEMENTS,
                 Terminal.LCUR: NonTerminal.ELEMENTS,
@@ -209,7 +189,7 @@ class SyntaticalAnalysis():
                 Terminal.LCUR: NonTerminal.VALUE_OBJECT,
                 Terminal.LBRAC: NonTerminal.VALUE_ARRAY,
                 Terminal.BOOLEAN: Terminal.VALUE_BOOLEAN,
-                Terminal.STRING: Terminal.VALUE_STRING,
+                Terminal.QUOTE: Terminal.VALUE_STRING,
                 Terminal.MINUS: NonTerminal.VALUE_NUMBER,
                 Terminal.ZERO: NonTerminal.VALUE_NUMBER,
                 Terminal.ONE_NINE: NonTerminal.VALUE_NUMBER,
@@ -219,7 +199,7 @@ class SyntaticalAnalysis():
                 Terminal.RBRAC: Terminal.RBRAC
             },
             NonTerminal.MEMBERS: {
-                Terminal.STRING: NonTerminal.MEMBERS,
+                Terminal.CHAR: NonTerminal.MEMBERS,
                 Terminal.COMMA: NonTerminal.MEMBERS,
                 Terminal.RCUR: Terminal.EMPTY
             },
@@ -227,7 +207,7 @@ class SyntaticalAnalysis():
                 Terminal.COMMA: NonTerminal.MEMBERS_TAIL,
                 Terminal.RCUR: Terminal.EMPTY,
             },
-            NonTerminal.MEMBER: {Terminal.STRING: NonTerminal.MEMBER},
+            NonTerminal.MEMBER: {Terminal.QUOTE: NonTerminal.MEMBER},
             NonTerminal.INTEGER: {
                 NonTerminal.DIGIT: NonTerminal.INTEGER_DIGIT,
                 Terminal.ONE_NINE: NonTerminal.INTEGER_ONE_NINE,
@@ -271,19 +251,33 @@ class SyntaticalAnalysis():
                 Terminal.MINUS: NonTerminal.SIGN_MINUS,
                 Terminal.PLUS: NonTerminal.SIGN_PLUS,
             },
+            NonTerminal.CHARS: {
+                Terminal.QUOTE: Terminal.EMPTY,
+                Terminal.CHAR: NonTerminal.CHARS,
+            },
+            NonTerminal.CHARS_TAIL: {
+                Terminal.QUOTE: Terminal.EMPTY,
+                Terminal.CHAR: NonTerminal.CHARS,
+            },
+            NonTerminal.STRING: {
+                Terminal.QUOTE: NonTerminal.STRING,
+            }
         }
         self.rules = {
             NonTerminal.ELEMENT: [NonTerminal.VALUE],
             NonTerminal.ELEMENTS: [NonTerminal.ELEMENT, NonTerminal.ELEMENTS_TAIL],
             NonTerminal.ELEMENTS_TAIL: [Terminal.COMMA, NonTerminal.ELEMENT, NonTerminal.ELEMENTS_TAIL],
 
-            NonTerminal.MEMBER: [Terminal.STRING, Terminal.COLON, NonTerminal.VALUE],
+            NonTerminal.MEMBER: [NonTerminal.STRING, Terminal.COLON, NonTerminal.VALUE],
             NonTerminal.MEMBERS: [NonTerminal.MEMBER, NonTerminal.MEMBERS_TAIL],
             NonTerminal.MEMBERS_TAIL: [Terminal.COMMA, NonTerminal.MEMBER, NonTerminal.MEMBERS_TAIL],
 
             NonTerminal.VALUE: [NonTerminal.VALUE],
             NonTerminal.VALUE_OBJECT: [Terminal.LCUR, NonTerminal.MEMBERS, Terminal.RCUR],
             NonTerminal.VALUE_ARRAY: [Terminal.LBRAC, NonTerminal.ELEMENTS, Terminal.RBRAC],
+
+            NonTerminal.STRING: [Terminal.QUOTE, NonTerminal.CHARS, Terminal.QUOTE],
+            NonTerminal.CHARS: [Terminal.CHAR, NonTerminal.CHARS_TAIL],
 
             NonTerminal.VALUE_NUMBER: [NonTerminal.INTEGER, NonTerminal.FRACTION, NonTerminal.EXPONENT],
             NonTerminal.INTEGER_DIGIT: [NonTerminal.DIGIT, NonTerminal.DIGITS],
@@ -300,11 +294,26 @@ class SyntaticalAnalysis():
             Terminal.ZERO: [Terminal.ZERO],
             Terminal.ONE_NINE: [Terminal.ONE_NINE],
 
-            Terminal.VALUE_STRING: [Terminal.STRING],
+            Terminal.VALUE_STRING: [NonTerminal.STRING],
             Terminal.VALUE_BOOLEAN: [Terminal.BOOLEAN],
             Terminal.VALUE_NUMBER: [NonTerminal.DIGITS],
             Terminal.VALUE_NULL: [Terminal.NULL],
             Terminal.EMPTY: [],
+        }
+        self.CHAR_TO_SPECIAL_TERM = {
+            '"': (Terminal.QUOTE, None),
+            '\\': (Terminal.BACKSLASH, None),
+            '{': (Terminal.LCUR, None),
+            '}': (Terminal.RCUR, None),
+            '[': (Terminal.LBRAC, None),
+            ']': (Terminal.RBRAC, None),
+            ':': (Terminal.COLON, None),
+            ',': (Terminal.COMMA, None),
+            '-': (Terminal.MINUS, None),
+            '+': (Terminal.PLUS, None),
+            '.': (Terminal.PERIOD, None),
+            'e': (Terminal.EXPONENT, None),
+            'E': (Terminal.EXPONENT, None),
         }
         self.stack = [Terminal.END, NonTerminal.ELEMENT]
 
@@ -315,27 +324,34 @@ class SyntaticalAnalysis():
         ### TODO: Make this into a library or module and use in another program
         ###
     def run(self, tokens : list[Tuple[Terminal, object]]):
-        print(tokens)
+        logger.debug(tokens)
         position = 0
         while self.stack:
             svalue = self.stack.pop()
             token = tokens[position]
             if isinstance(svalue, Term):
+                if svalue != token[0] and token[1] in self.CHAR_TO_SPECIAL_TERM:
+                    print("SPECIAL REPLACE")
+                    token = self.CHAR_TO_SPECIAL_TERM[token[1]]
                 if svalue == token[0]:
                     position += 1
-                    print("pop", svalue)
+                    logger.debug(f"pop {svalue}")
                     if token[0] == Terminal.END:
-                        print("input accepted")
+                        logger.info("input accepted")
                 else:
                     raise ValueError("bad term on input:", str(token))
             elif isinstance(svalue, Rule):
-                print(f"{svalue = !s}, {token = !s}")
+                if token[1] in self.CHAR_TO_SPECIAL_TERM and self.CHAR_TO_SPECIAL_TERM[token[1]][0] in self.table[svalue]:
+                    print("SPECIAL REPLACE")
+                    token = self.CHAR_TO_SPECIAL_TERM[token[1]]
+
+                logger.debug(f"{svalue = !s}, {token = !s}")
                 rule = self.table[svalue][token[0]]
-                print(f"{rule = }")
+                logger.debug(f"{rule = }")
                 for r in reversed(self.rules[rule]):
                     self.stack.append(r)
-            print("stacks:", end=" ")
-            print(*self.stack, sep=", ")
+            logger.debug("stacks:")
+            logger.debug(self.stack)
 
 
 class JSON_Parser():
@@ -344,12 +360,25 @@ class JSON_Parser():
         my_lexer = Lexer(raw_json)
         my_syntax_analyzer = SyntaticalAnalysis()
 
-        print(my_syntax_analyzer.run(list(my_lexer.lexical_analysis())))
+        logger.debug(my_syntax_analyzer.run(list(my_lexer.lexical_analysis())))
         return True
 
-if __name__ == "__main__":
+logger.setLevel(logging.DEBUG)
+if __name__ =="__main__":
+    JSON_Parser.parse("""
+    [
+    "abc", 123
+    ]
+    """)
+    sys.exit(0)
+
+    if len(sys.argv) < 2:
+        print("Enter filename to parse")
+        sys.exit(1)
+
     contents = []
-    with open("./simple_example.json") as f:
+    with open(sys.argv[1]) as f:
         contents = f.read()
-        print(contents)
+        logger.debug(contents)
+
     JSON_Parser.parse(contents)

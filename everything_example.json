@@ -1,0 +1,41 @@
+{
+  "profile": {
+    "userId": "user-4b79b6c4-12a9-4670-b747-d1a8e1b34f82",
+    "isActive": true,
+    "loginCount": 1245,
+    "lastLogin": null,
+    "metadata": {
+      "creationTimestamp": 1756184200000,
+      "source": "api"
+    },
+    "preferences": [
+      {
+        "theme": "dark",
+        "language": "en-US",
+        "notifications": false
+      }
+    ],
+    "about": "This is a string containing Unicode characters like °C and accents like é, as well as escaped characters: a quote (\") and a backslash (\\)."
+  },
+  "history": [
+    "viewed_products",
+    1756183000000,
+    true,
+    null,
+    {
+      "event": "clicked_promo",
+      "promoId": "promo-spring-2025"
+    }
+  ],
+  "mixedNumbers": [
+    -12345,
+    1.25e+2,
+    987654321
+  ],
+  "rootArray": [
+    "A root-level array is also valid JSON",
+    {
+      "nestedInArray": "object"
+    }
+  ]
+}
