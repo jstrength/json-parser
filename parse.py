@@ -215,6 +215,7 @@ class SyntaticalAnalysis():
                 Terminal.ZERO: NonTerminal.ELEMENTS,
                 Terminal.ONE_NINE: NonTerminal.ELEMENTS,
                 Terminal.LCUR: NonTerminal.ELEMENTS,
+                Terminal.MINUS: NonTerminal.ELEMENTS,
                 Terminal.COMMA: NonTerminal.ELEMENTS_TAIL,
                 Terminal.RBRAC: Terminal.EMPTY
             },
@@ -291,11 +292,18 @@ class SyntaticalAnalysis():
             NonTerminal.CHARS: {
                 Terminal.QUOTE: Terminal.EMPTY,
                 Terminal.CHAR: NonTerminal.CHARS,
+                Terminal.EXPONENT: NonTerminal.CHARS,
                 Terminal.BACKSLASH: NonTerminal.ESCAPE,
             },
             NonTerminal.CHARS_TAIL: {
                 Terminal.QUOTE: Terminal.EMPTY,
                 Terminal.CHAR: NonTerminal.CHARS,
+                Terminal.MINUS: NonTerminal.CHARS,
+                Terminal.ZERO: NonTerminal.CHARS,
+                Terminal.COMMA: NonTerminal.CHARS,
+                Terminal.COLON: NonTerminal.CHARS,
+                Terminal.PERIOD: NonTerminal.CHARS,
+                Terminal.ONE_NINE: NonTerminal.CHARS,
                 Terminal.EXPONENT: NonTerminal.CHARS,
                 Terminal.BACKSLASH: NonTerminal.ESCAPE,
             },
@@ -342,8 +350,8 @@ class SyntaticalAnalysis():
             Terminal.VALUE_NULL: [Terminal.NULL],
             Terminal.EMPTY: [],
         }
-        self.SPECIAL_CHARS = set(['"', '\\', '{', '}', '[', ']', ':', ',', '-', '+', '.', 'e', 'E',])
-        self.ESCAPE_SPECIAL_CHARS = set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't']) # TODO: Add u and hex support
+        self.SPECIAL_CHARS = set(['"', '\\', '{', '}', '[', ']', ':', ',', '-', '+', '.', 'e', 'E', '0'])
+        self.ESCAPE_SPECIAL_CHARS = set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u'])
         self.stack = [Terminal.END, NonTerminal.ELEMENT]
 
         ###
@@ -365,7 +373,7 @@ class SyntaticalAnalysis():
                 #
                 logger.debug(f"{svalue = !s}, {token = !s}")
                 if svalue != token[0]:
-                    if token[1] in self.SPECIAL_CHARS:
+                    if token[1] in self.SPECIAL_CHARS or token[0] == Terminal.ONE_NINE:
                         token = (Terminal.CHAR, token[1])
                     if svalue == Terminal.ESCAPE_SPECIAL and token[1] in self.ESCAPE_SPECIAL_CHARS:
                         token = (Terminal.ESCAPE_SPECIAL, token[1])
@@ -406,13 +414,8 @@ class JSON_Parser():
 
 logger.setLevel(logging.DEBUG)
 if __name__ =="__main__":
-    # JSON_Parser.parse("""
-    #     {
-    #         "a": ["abc", true, false, null, 5, {"testing": "nesting"}, [1,2,3]]
-    #     }
-    # """)
     JSON_Parser.parse("""
-    "a\\"ok\\"bc"
+    "\\u8A20"
     """)
     sys.exit(0)
 

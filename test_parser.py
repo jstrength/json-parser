@@ -26,6 +26,13 @@ def test_escaped_string():
     "he said \\"hello\\""
     """
     assert JSON_Parser.parse(json_example)
+
+def test_escaped_hex_string():
+    json_example = """
+    "he said \\u8A12"
+    """
+    assert JSON_Parser.parse(json_example)
+
 def test_empty_object():
     json_example = """
     {

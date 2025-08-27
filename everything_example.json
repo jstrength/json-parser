@@ -12,7 +12,8 @@
       {
         "theme": "dark",
         "language": "en-US",
-        "notifications": false
+        "notifications": false,
+        "hex": "\u8A20"
       }
     ],
     "about": "This is a string containing Unicode characters like °C and accents like é, as well as escaped characters: a quote (\") and a backslash (\\)."
