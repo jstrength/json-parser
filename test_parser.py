@@ -21,6 +21,11 @@ def test_weird_spaces_object():
     """
     assert JSON_Parser.parse(json_example)
 
+def test_escaped_string():
+    json_example = """
+    "he said \\"hello\\""
+    """
+    assert JSON_Parser.parse(json_example)
 def test_empty_object():
     json_example = """
     {
