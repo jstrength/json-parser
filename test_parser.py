@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 
+import pytest # type: ignore
+
 from parse import JSON_Parser
+
 
 def test_object():
     json_example = """
@@ -32,6 +35,13 @@ def test_escaped_hex_string():
     "he said \\u8A12"
     """
     assert JSON_Parser.parse(json_example)
+
+def test_escaped_bad_hex_string():
+    json_example = """
+    "he said \\u8Z12"
+    """
+    with pytest.raises(ValueError):
+        JSON_Parser.parse(json_example)
 
 def test_empty_object():
     json_example = """

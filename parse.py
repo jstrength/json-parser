@@ -43,6 +43,8 @@ class Terminal(Term):
     VALUE_NULL = auto()
     EMPTY = auto()
     ESCAPE_SPECIAL = auto()
+    ESCAPE_HEX = auto()
+    HEX = auto()
 
     def __str__(self):
         return f"T_{self.name}"
@@ -79,6 +81,11 @@ class NonTerminal(Rule):
     CHARS = auto()
     CHARS_TAIL = auto()
     ESCAPE = auto()
+    ESCAPE_TAIL = auto()
+    ESCAPE_HEX_TAIL = auto()
+    NULL = auto()
+    FALSE = auto()
+    TRUE = auto()
 
     def __str__(self):
         return f"T_{self.name}"
@@ -109,29 +116,13 @@ class Lexer():
 
             if c in WS + ['\n']:
                 self.idx += 1  # ignore
-                continue
             elif c.isnumeric():
                 self.idx += 1
                 if c == '0':
                     yield (Terminal.ZERO, c)
                 else:
                     yield (Terminal.ONE_NINE, c)
-                continue
-            elif c in ["t", "f", "n"]:
-                if self.input_string[self.idx:self.idx + 4] == "true":
-                    self.idx += 4
-                    yield (Terminal.BOOLEAN, True)
-                    continue
-                elif self.input_string[self.idx:self.idx + 5] == "false":
-                    self.idx += 5
-                    yield (Terminal.BOOLEAN, False)
-                    continue
-                elif self.input_string[self.idx:self.idx + 4] == "null":
-                    self.idx += 4
-                    yield (Terminal.NULL, None)
-                    continue
-
-            if c >= '\u0020' and c <= '\U0010FFFF':
+            elif c >= '\u0020' and c <= '\U0010FFFF':
                 self.idx += 1
                 match c:
                     case '"':
@@ -209,6 +200,9 @@ class SyntaticalAnalysis():
                 Terminal.ONE_NINE: NonTerminal.VALUE,
                 Terminal.LCUR: NonTerminal.VALUE,
                 Terminal.LBRAC: NonTerminal.VALUE,
+                (Terminal.CHAR, 'n'): NonTerminal.NULL,
+                (Terminal.CHAR, 't'): NonTerminal.TRUE,
+                (Terminal.CHAR, 'f'): NonTerminal.FALSE,
             },
             NonTerminal.ELEMENTS: {
                 Terminal.QUOTE: NonTerminal.ELEMENTS,
@@ -232,6 +226,9 @@ class SyntaticalAnalysis():
                 Terminal.ZERO: NonTerminal.VALUE_NUMBER,
                 Terminal.ONE_NINE: NonTerminal.VALUE_NUMBER,
                 Terminal.NULL: Terminal.VALUE_NULL,
+                (Terminal.CHAR, 'n'): NonTerminal.NULL,
+                (Terminal.CHAR, 't'): NonTerminal.TRUE,
+                (Terminal.CHAR, 'f'): NonTerminal.FALSE,
             },
             NonTerminal.VALUE_ARRAY: {
                 Terminal.RBRAC: Terminal.RBRAC
@@ -292,6 +289,9 @@ class SyntaticalAnalysis():
             NonTerminal.CHARS: {
                 Terminal.QUOTE: Terminal.EMPTY,
                 Terminal.CHAR: NonTerminal.CHARS,
+                Terminal.ZERO: NonTerminal.CHARS,
+                Terminal.PERIOD: NonTerminal.CHARS,
+                Terminal.ONE_NINE: NonTerminal.CHARS,
                 Terminal.EXPONENT: NonTerminal.CHARS,
                 Terminal.BACKSLASH: NonTerminal.ESCAPE,
             },
@@ -309,6 +309,10 @@ class SyntaticalAnalysis():
             },
             NonTerminal.STRING: {
                 Terminal.QUOTE: NonTerminal.STRING,
+            },
+            NonTerminal.ESCAPE_TAIL: {
+                Terminal.ESCAPE_SPECIAL: NonTerminal.ESCAPE_TAIL,
+                Terminal.ESCAPE_HEX: NonTerminal.ESCAPE_HEX_TAIL,
             },
         }
         self.rules = {
@@ -339,7 +343,13 @@ class SyntaticalAnalysis():
             NonTerminal.SIGN_MINUS: [Terminal.MINUS],
             NonTerminal.SIGN_PLUS: [Terminal.PLUS],
 
-            NonTerminal.ESCAPE: [Terminal.BACKSLASH, Terminal.ESCAPE_SPECIAL, NonTerminal.CHARS_TAIL],
+            NonTerminal.ESCAPE: [Terminal.BACKSLASH, NonTerminal.ESCAPE_TAIL],
+            NonTerminal.ESCAPE_TAIL: [Terminal.ESCAPE_SPECIAL, NonTerminal.CHARS_TAIL],
+            NonTerminal.ESCAPE_HEX_TAIL: [Terminal.ESCAPE_SPECIAL, Terminal.HEX, Terminal.HEX, Terminal.HEX, Terminal.HEX,  NonTerminal.CHARS_TAIL],
+
+            NonTerminal.NULL: [(Terminal.CHAR, 'n'),(Terminal.CHAR, 'u'), (Terminal.CHAR, 'l'), (Terminal.CHAR, 'l') ],
+            NonTerminal.TRUE: [(Terminal.CHAR, 't'),(Terminal.CHAR, 'r'), (Terminal.CHAR, 'u'), (Terminal.CHAR, 'e') ],
+            NonTerminal.FALSE: [(Terminal.CHAR, 'f'),(Terminal.CHAR, 'a'), (Terminal.CHAR, 'l'), (Terminal.CHAR, 's'), (Terminal.CHAR, 'e') ],
 
             Terminal.ZERO: [Terminal.ZERO],
             Terminal.ONE_NINE: [Terminal.ONE_NINE],
@@ -366,7 +376,7 @@ class SyntaticalAnalysis():
         while self.stack:
             svalue = self.stack.pop()
             token = tokens[position]
-            if isinstance(svalue, Term):
+            if isinstance(svalue, Term) or (isinstance(svalue, Tuple) and isinstance(svalue[0], Term)):
                 # if svalue != token[0] and token[1] in self.CHAR_TO_SPECIAL_TERM:
                 #     print("SPECIAL REPLACE")
                 #     token = self.CHAR_TO_SPECIAL_TERM[token[1]]
@@ -377,8 +387,14 @@ class SyntaticalAnalysis():
                         token = (Terminal.CHAR, token[1])
                     if svalue == Terminal.ESCAPE_SPECIAL and token[1] in self.ESCAPE_SPECIAL_CHARS:
                         token = (Terminal.ESCAPE_SPECIAL, token[1])
+                    if svalue == Terminal.HEX:
+                        if 'a' <= token[1] <= 'f' or \
+                           'A' <= token[1] <= 'F' or \
+                           '0' <= token[1] <= '9':
+                            token = (Terminal.HEX, token[1])
 
-                if svalue == token[0]:
+                logger.debug(f"{svalue = !s}, {token = !s}")
+                if svalue == token[0] or svalue == token:
                     position += 1
                     logger.debug(f"pop {svalue}")
                     if token[0] == Terminal.END:
@@ -390,12 +406,20 @@ class SyntaticalAnalysis():
                 #     print("SPECIAL REPLACE")
                 #     token = self.CHAR_TO_SPECIAL_TERM[token[1]]
                 #
-                # if svalue == NonTerminal.ESCAPE_TAIL:
-                #     if token[1] in self.ESCAPE_SPECIAL_CHARS:
-                #         token = (Terminal.ESCAPE_SPECIAL, token[1])
+                if svalue == NonTerminal.ESCAPE_TAIL:
+                    if token[1] in self.ESCAPE_SPECIAL_CHARS:
+                        if token[1] == 'u': #hex
+                            token = (Terminal.ESCAPE_HEX, token[1])
+                        else:
+                            token = (Terminal.ESCAPE_SPECIAL, token[1])
 
                 logger.debug(f"{svalue = !s}, {token = !s}")
-                rule = self.table[svalue][token[0]]
+                if token[0] in self.table[svalue]:
+                    rule = self.table[svalue][token[0]]
+                elif token in self.table[svalue]:
+                    rule = self.table[svalue][token]
+                else:
+                    raise ValueError(f"no rule found: svalue: {str(svalue)} token: {str(token)}")
                 logger.debug(f"{rule = }")
                 for r in reversed(self.rules[rule]):
                     self.stack.append(r)
@@ -412,12 +436,12 @@ class JSON_Parser():
         logger.debug(my_syntax_analyzer.run(list(my_lexer.lexical_analysis())))
         return True
 
-logger.setLevel(logging.DEBUG)
+#logger.setLevel(logging.DEBUG)
 if __name__ =="__main__":
-    JSON_Parser.parse("""
-    "\\u8A20"
-    """)
-    sys.exit(0)
+    # JSON_Parser.parse("""
+    # null
+    # """)
+    # sys.exit(0)
 
     if len(sys.argv) < 2:
         print("Enter filename to parse")
