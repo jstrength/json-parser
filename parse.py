@@ -18,26 +18,11 @@ class Rule(Enum):
     pass
 
 class Terminal(Term):
-    LCUR = auto()
-    RCUR = auto()
-    LBRAC = auto()
-    RBRAC = auto()
-    COLON = auto()
-    COMMA = auto()
-    MINUS = auto()
-    PLUS = auto()
-    PERIOD = auto()
     ZERO = auto()
     ONE_NINE = auto()
     CHAR = auto()
-    QUOTE = auto()
-    BACKSLASH = auto()
-    EXPONENT = auto()
-    BOOLEAN = auto()
-    NULL = auto()
     INVALID = auto()
     END = auto()
-    VALUE_STRING = auto()
     VALUE_NUMBER = auto()
     VALUE_BOOLEAN = auto()
     VALUE_NULL = auto()
@@ -52,19 +37,21 @@ class Terminal(Term):
 
 class NonTerminal(Rule):
     """Non Terminals used during syntatical analysis."""
-    ELEMENT = auto()
     ELEMENTS = auto()
     ELEMENTS_TAIL = auto()
     VALUE = auto()
     VALUE_OBJECT = auto()
     VALUE_ARRAY = auto()
     VALUE_NUMBER = auto()
+    VALUE_STRING = auto()
     MEMBER = auto()
     MEMBERS = auto()
     MEMBERS_TAIL = auto()
     FRACTION = auto()
     FRACTION_TAIL = auto()
     EXPONENT = auto()
+    EXPONENT_E = auto()
+    EXPONENT_e = auto()
     SIGN = auto()
     SIGN_PLUS = auto()
     SIGN_MINUS = auto()
@@ -77,7 +64,6 @@ class NonTerminal(Rule):
     INTEGER_MINUS_ONE_NINE = auto()
     DIGIT = auto()
     DIGITS = auto()
-    STRING = auto()
     CHARS = auto()
     CHARS_TAIL = auto()
     ESCAPE = auto()
@@ -124,35 +110,7 @@ class Lexer():
                     yield (Terminal.ONE_NINE, c)
             elif c >= '\u0020' and c <= '\U0010FFFF':
                 self.idx += 1
-                match c:
-                    case '"':
-                        yield (Terminal.QUOTE, c)
-                    case '\\':
-                        yield (Terminal.BACKSLASH, c)
-                    case '{':
-                        yield (Terminal.LCUR, c)
-                    case '}':
-                        yield (Terminal.RCUR, c)
-                    case '[':
-                        yield (Terminal.LBRAC, c)
-                    case ']':
-                        yield (Terminal.RBRAC, c)
-                    case ':':
-                        yield (Terminal.COLON, c)
-                    case ',':
-                        yield (Terminal.COMMA, c)
-                    case '-':
-                        yield (Terminal.MINUS, c)
-                    case '+':
-                        yield (Terminal.PLUS, c)
-                    case '.':
-                        yield (Terminal.PERIOD, c)
-                    case 'e':
-                        yield (Terminal.EXPONENT, c)
-                    case 'E':
-                        yield (Terminal.EXPONENT, c)
-                    case _:
-                        yield (Terminal.CHAR, c)
+                yield (Terminal.CHAR, c)
             else:
                 print("got invalid input ", c)
                 exit(1)
@@ -191,62 +149,50 @@ class SyntaticalAnalysis():
 
     def __init__(self):
         self.table = {
-            NonTerminal.ELEMENT: {
-                Terminal.BOOLEAN: NonTerminal.VALUE,
-                Terminal.NULL: NonTerminal.VALUE,
-                Terminal.QUOTE: NonTerminal.VALUE,
-                Terminal.MINUS: NonTerminal.VALUE,
-                Terminal.ZERO: NonTerminal.VALUE,
-                Terminal.ONE_NINE: NonTerminal.VALUE,
-                Terminal.LCUR: NonTerminal.VALUE,
-                Terminal.LBRAC: NonTerminal.VALUE,
-                (Terminal.CHAR, 'n'): NonTerminal.NULL,
-                (Terminal.CHAR, 't'): NonTerminal.TRUE,
-                (Terminal.CHAR, 'f'): NonTerminal.FALSE,
-            },
             NonTerminal.ELEMENTS: {
-                Terminal.QUOTE: NonTerminal.ELEMENTS,
+                (Terminal.CHAR, '"'): NonTerminal.ELEMENTS,
                 Terminal.ZERO: NonTerminal.ELEMENTS,
                 Terminal.ONE_NINE: NonTerminal.ELEMENTS,
-                Terminal.LCUR: NonTerminal.ELEMENTS,
-                Terminal.MINUS: NonTerminal.ELEMENTS,
-                Terminal.COMMA: NonTerminal.ELEMENTS_TAIL,
-                Terminal.RBRAC: Terminal.EMPTY
+                (Terminal.CHAR, '{'): NonTerminal.ELEMENTS,
+                (Terminal.CHAR, '-'): NonTerminal.ELEMENTS,
+                (Terminal.CHAR, ','): NonTerminal.ELEMENTS_TAIL,
+                (Terminal.CHAR, ']'): Terminal.EMPTY
             },
             NonTerminal.ELEMENTS_TAIL: {
-                Terminal.COMMA: NonTerminal.ELEMENTS_TAIL,
-                Terminal.RBRAC: Terminal.EMPTY
+                (Terminal.CHAR, ','): NonTerminal.ELEMENTS_TAIL,
+                (Terminal.CHAR, ']'): Terminal.EMPTY
             },
             NonTerminal.VALUE: {
-                Terminal.LCUR: NonTerminal.VALUE_OBJECT,
-                Terminal.LBRAC: NonTerminal.VALUE_ARRAY,
-                Terminal.BOOLEAN: Terminal.VALUE_BOOLEAN,
-                Terminal.QUOTE: Terminal.VALUE_STRING,
-                Terminal.MINUS: NonTerminal.VALUE_NUMBER,
+                (Terminal.CHAR, '{'): NonTerminal.VALUE_OBJECT,
+                (Terminal.CHAR, '['): NonTerminal.VALUE_ARRAY,
+                (Terminal.CHAR, '"'): NonTerminal.VALUE_STRING,
+                (Terminal.CHAR, '-'): NonTerminal.VALUE_NUMBER,
                 Terminal.ZERO: NonTerminal.VALUE_NUMBER,
                 Terminal.ONE_NINE: NonTerminal.VALUE_NUMBER,
-                Terminal.NULL: Terminal.VALUE_NULL,
                 (Terminal.CHAR, 'n'): NonTerminal.NULL,
                 (Terminal.CHAR, 't'): NonTerminal.TRUE,
                 (Terminal.CHAR, 'f'): NonTerminal.FALSE,
             },
+            NonTerminal.VALUE_STRING: {
+                (Terminal.CHAR, '"'): NonTerminal.VALUE_STRING
+            },
             NonTerminal.VALUE_ARRAY: {
-                Terminal.RBRAC: Terminal.RBRAC
+                (Terminal.CHAR, ']'): (Terminal.CHAR, ']')
             },
             NonTerminal.MEMBERS: {
-                Terminal.QUOTE: NonTerminal.MEMBERS,
-                Terminal.COMMA: NonTerminal.MEMBERS,
-                Terminal.RCUR: Terminal.EMPTY
+                (Terminal.CHAR, '"'): NonTerminal.MEMBERS,
+                (Terminal.CHAR, ','): NonTerminal.MEMBERS,
+                (Terminal.CHAR, '}'): Terminal.EMPTY
             },
             NonTerminal.MEMBERS_TAIL: {
-                Terminal.COMMA: NonTerminal.MEMBERS_TAIL,
-                Terminal.RCUR: Terminal.EMPTY,
+                (Terminal.CHAR, ','): NonTerminal.MEMBERS_TAIL,
+                (Terminal.CHAR, '}'): Terminal.EMPTY,
             },
-            NonTerminal.MEMBER: {Terminal.QUOTE: NonTerminal.MEMBER},
+            NonTerminal.MEMBER: {(Terminal.CHAR, '"'): NonTerminal.MEMBER},
             NonTerminal.INTEGER: {
                 NonTerminal.DIGIT: NonTerminal.INTEGER_DIGIT,
                 Terminal.ONE_NINE: NonTerminal.INTEGER_ONE_NINE,
-                Terminal.MINUS: NonTerminal.INTEGER_MINUS,
+                (Terminal.CHAR, '-'): NonTerminal.INTEGER_MINUS,
             },
             NonTerminal.INTEGER_MINUS_TAIL: {
                 Terminal.ONE_NINE: NonTerminal.INTEGER_MINUS_ONE_NINE,
@@ -254,11 +200,12 @@ class SyntaticalAnalysis():
             NonTerminal.DIGITS: {
                 Terminal.ZERO: NonTerminal.INTEGER_DIGIT,
                 Terminal.ONE_NINE: NonTerminal.INTEGER_DIGIT,
-                Terminal.PERIOD: Terminal.EMPTY,
-                Terminal.COMMA: Terminal.EMPTY,
-                Terminal.RCUR: Terminal.EMPTY,
-                Terminal.RBRAC: Terminal.EMPTY,
-                Terminal.EXPONENT: Terminal.EMPTY,
+                (Terminal.CHAR, '.'): Terminal.EMPTY,
+                (Terminal.CHAR, ','): Terminal.EMPTY,
+                (Terminal.CHAR, '}'): Terminal.EMPTY,
+                (Terminal.CHAR, ']'): Terminal.EMPTY,
+                (Terminal.CHAR, 'E'): Terminal.EMPTY,
+                (Terminal.CHAR, 'e'): Terminal.EMPTY,
                 Terminal.END: Terminal.EMPTY,
             },
             NonTerminal.DIGIT: {
@@ -266,49 +213,41 @@ class SyntaticalAnalysis():
                 Terminal.ONE_NINE: Terminal.ONE_NINE,
             },
             NonTerminal.FRACTION: {
-                Terminal.PERIOD: NonTerminal.FRACTION_TAIL,
-                Terminal.COMMA: Terminal.EMPTY,
-                Terminal.RCUR: Terminal.EMPTY,
-                Terminal.RBRAC: Terminal.EMPTY,
-                Terminal.EXPONENT: Terminal.EMPTY,
+                (Terminal.CHAR, '.'): NonTerminal.FRACTION_TAIL,
+                (Terminal.CHAR, ','): Terminal.EMPTY,
+                (Terminal.CHAR, '}'): Terminal.EMPTY,
+                (Terminal.CHAR, ']'): Terminal.EMPTY,
+                (Terminal.CHAR, 'E'): Terminal.EMPTY,
+                (Terminal.CHAR, 'e'): Terminal.EMPTY,
                 Terminal.END: Terminal.EMPTY,
             },
             NonTerminal.EXPONENT: {
-                Terminal.EXPONENT: NonTerminal.EXPONENT,
-                Terminal.COMMA: Terminal.EMPTY,
-                Terminal.RCUR: Terminal.EMPTY,
-                Terminal.RBRAC: Terminal.EMPTY,
+                (Terminal.CHAR, 'E'): NonTerminal.EXPONENT_E,
+                (Terminal.CHAR, 'e'): NonTerminal.EXPONENT_e,
+                (Terminal.CHAR, ','): Terminal.EMPTY,
+                (Terminal.CHAR, '}'): Terminal.EMPTY,
+                (Terminal.CHAR, ']'): Terminal.EMPTY,
                 Terminal.END: Terminal.EMPTY,
             },
             NonTerminal.SIGN: {
                 Terminal.ZERO: Terminal.EMPTY,
                 Terminal.ONE_NINE: Terminal.EMPTY,
-                Terminal.MINUS: NonTerminal.SIGN_MINUS,
-                Terminal.PLUS: NonTerminal.SIGN_PLUS,
+                (Terminal.CHAR, '-'): NonTerminal.SIGN_MINUS,
+                (Terminal.CHAR, '+'): NonTerminal.SIGN_PLUS,
             },
             NonTerminal.CHARS: {
-                Terminal.QUOTE: Terminal.EMPTY,
+                (Terminal.CHAR, '"'): Terminal.EMPTY,
                 Terminal.CHAR: NonTerminal.CHARS,
                 Terminal.ZERO: NonTerminal.CHARS,
-                Terminal.PERIOD: NonTerminal.CHARS,
                 Terminal.ONE_NINE: NonTerminal.CHARS,
-                Terminal.EXPONENT: NonTerminal.CHARS,
-                Terminal.BACKSLASH: NonTerminal.ESCAPE,
+                (Terminal.CHAR, '\\'): NonTerminal.ESCAPE,
             },
             NonTerminal.CHARS_TAIL: {
-                Terminal.QUOTE: Terminal.EMPTY,
+                (Terminal.CHAR, '"'): Terminal.EMPTY,
                 Terminal.CHAR: NonTerminal.CHARS,
-                Terminal.MINUS: NonTerminal.CHARS,
                 Terminal.ZERO: NonTerminal.CHARS,
-                Terminal.COMMA: NonTerminal.CHARS,
-                Terminal.COLON: NonTerminal.CHARS,
-                Terminal.PERIOD: NonTerminal.CHARS,
                 Terminal.ONE_NINE: NonTerminal.CHARS,
-                Terminal.EXPONENT: NonTerminal.CHARS,
-                Terminal.BACKSLASH: NonTerminal.ESCAPE,
-            },
-            NonTerminal.STRING: {
-                Terminal.QUOTE: NonTerminal.STRING,
+                (Terminal.CHAR, '\\'): NonTerminal.ESCAPE,
             },
             NonTerminal.ESCAPE_TAIL: {
                 Terminal.ESCAPE_SPECIAL: NonTerminal.ESCAPE_TAIL,
@@ -316,34 +255,34 @@ class SyntaticalAnalysis():
             },
         }
         self.rules = {
-            NonTerminal.ELEMENT: [NonTerminal.VALUE],
-            NonTerminal.ELEMENTS: [NonTerminal.ELEMENT, NonTerminal.ELEMENTS_TAIL],
-            NonTerminal.ELEMENTS_TAIL: [Terminal.COMMA, NonTerminal.ELEMENT, NonTerminal.ELEMENTS_TAIL],
+            NonTerminal.ELEMENTS: [NonTerminal.VALUE, NonTerminal.ELEMENTS_TAIL],
+            NonTerminal.ELEMENTS_TAIL: [(Terminal.CHAR, ','), NonTerminal.VALUE, NonTerminal.ELEMENTS_TAIL],
 
-            NonTerminal.MEMBER: [NonTerminal.STRING, Terminal.COLON, NonTerminal.VALUE],
+            NonTerminal.MEMBER: [NonTerminal.VALUE_STRING, (Terminal.CHAR, ':'), NonTerminal.VALUE],
             NonTerminal.MEMBERS: [NonTerminal.MEMBER, NonTerminal.MEMBERS_TAIL],
-            NonTerminal.MEMBERS_TAIL: [Terminal.COMMA, NonTerminal.MEMBER, NonTerminal.MEMBERS_TAIL],
+            NonTerminal.MEMBERS_TAIL: [(Terminal.CHAR, ','), NonTerminal.MEMBER, NonTerminal.MEMBERS_TAIL],
 
             NonTerminal.VALUE: [NonTerminal.VALUE],
-            NonTerminal.VALUE_OBJECT: [Terminal.LCUR, NonTerminal.MEMBERS, Terminal.RCUR],
-            NonTerminal.VALUE_ARRAY: [Terminal.LBRAC, NonTerminal.ELEMENTS, Terminal.RBRAC],
+            NonTerminal.VALUE_OBJECT: [(Terminal.CHAR, '{'), NonTerminal.MEMBERS, (Terminal.CHAR, '}')],
+            NonTerminal.VALUE_ARRAY: [(Terminal.CHAR, '['), NonTerminal.ELEMENTS, (Terminal.CHAR, ']')],
+            NonTerminal.VALUE_STRING: [(Terminal.CHAR, '"'), NonTerminal.CHARS, (Terminal.CHAR, '"')],
 
-            NonTerminal.STRING: [Terminal.QUOTE, NonTerminal.CHARS, Terminal.QUOTE],
             NonTerminal.CHARS: [Terminal.CHAR, NonTerminal.CHARS_TAIL],
 
             NonTerminal.VALUE_NUMBER: [NonTerminal.INTEGER, NonTerminal.FRACTION, NonTerminal.EXPONENT],
             NonTerminal.INTEGER_DIGIT: [NonTerminal.DIGIT, NonTerminal.DIGITS],
             NonTerminal.INTEGER_ONE_NINE: [Terminal.ONE_NINE, NonTerminal.DIGITS],
-            NonTerminal.INTEGER_MINUS: [Terminal.MINUS, NonTerminal.INTEGER_MINUS_TAIL],
+            NonTerminal.INTEGER_MINUS: [(Terminal.CHAR, '-'), NonTerminal.INTEGER_MINUS_TAIL],
             NonTerminal.INTEGER_MINUS_DIGIT: [NonTerminal.DIGIT],
             NonTerminal.INTEGER_MINUS_ONE_NINE: [Terminal.ONE_NINE, NonTerminal.DIGITS],
-            NonTerminal.FRACTION_TAIL: [Terminal.PERIOD, NonTerminal.DIGITS],
-            NonTerminal.EXPONENT: [Terminal.EXPONENT, NonTerminal.SIGN, NonTerminal.DIGITS],
+            NonTerminal.FRACTION_TAIL: [(Terminal.CHAR, '.'), NonTerminal.DIGITS],
+            NonTerminal.EXPONENT_E: [(Terminal.CHAR, 'E'), NonTerminal.SIGN, NonTerminal.DIGITS],
+            NonTerminal.EXPONENT_e: [(Terminal.CHAR, 'e'), NonTerminal.SIGN, NonTerminal.DIGITS],
 
-            NonTerminal.SIGN_MINUS: [Terminal.MINUS],
-            NonTerminal.SIGN_PLUS: [Terminal.PLUS],
+            NonTerminal.SIGN_MINUS: [(Terminal.CHAR, '-')],
+            NonTerminal.SIGN_PLUS: [(Terminal.CHAR, '+')],
 
-            NonTerminal.ESCAPE: [Terminal.BACKSLASH, NonTerminal.ESCAPE_TAIL],
+            NonTerminal.ESCAPE: [(Terminal.CHAR, '\\'), NonTerminal.ESCAPE_TAIL],
             NonTerminal.ESCAPE_TAIL: [Terminal.ESCAPE_SPECIAL, NonTerminal.CHARS_TAIL],
             NonTerminal.ESCAPE_HEX_TAIL: [Terminal.ESCAPE_SPECIAL, Terminal.HEX, Terminal.HEX, Terminal.HEX, Terminal.HEX,  NonTerminal.CHARS_TAIL],
 
@@ -354,19 +293,13 @@ class SyntaticalAnalysis():
             Terminal.ZERO: [Terminal.ZERO],
             Terminal.ONE_NINE: [Terminal.ONE_NINE],
 
-            Terminal.VALUE_STRING: [NonTerminal.STRING],
-            Terminal.VALUE_BOOLEAN: [Terminal.BOOLEAN],
             Terminal.VALUE_NUMBER: [NonTerminal.DIGITS],
-            Terminal.VALUE_NULL: [Terminal.NULL],
             Terminal.EMPTY: [],
         }
-        self.SPECIAL_CHARS = set(['"', '\\', '{', '}', '[', ']', ':', ',', '-', '+', '.', 'e', 'E', '0'])
         self.ESCAPE_SPECIAL_CHARS = set(['"', '\\', '/', 'b', 'f', 'n', 'r', 't', 'u'])
-        self.stack = [Terminal.END, NonTerminal.ELEMENT]
+        self.stack = [Terminal.END, NonTerminal.VALUE]
 
         ###
-        ### TODO: review above rules and table
-        ### TODO: write tests
         ### TODO: convert into PYTHON data structure
         ### TODO: Make this into a library or module and use in another program
         ###
@@ -377,13 +310,9 @@ class SyntaticalAnalysis():
             svalue = self.stack.pop()
             token = tokens[position]
             if isinstance(svalue, Term) or (isinstance(svalue, Tuple) and isinstance(svalue[0], Term)):
-                # if svalue != token[0] and token[1] in self.CHAR_TO_SPECIAL_TERM:
-                #     print("SPECIAL REPLACE")
-                #     token = self.CHAR_TO_SPECIAL_TERM[token[1]]
-                #
                 logger.debug(f"{svalue = !s}, {token = !s}")
                 if svalue != token[0]:
-                    if token[1] in self.SPECIAL_CHARS or token[0] == Terminal.ONE_NINE:
+                    if token[0] == Terminal.ZERO or token[0] == Terminal.ONE_NINE:
                         token = (Terminal.CHAR, token[1])
                     if svalue == Terminal.ESCAPE_SPECIAL and token[1] in self.ESCAPE_SPECIAL_CHARS:
                         token = (Terminal.ESCAPE_SPECIAL, token[1])
@@ -402,10 +331,6 @@ class SyntaticalAnalysis():
                 else:
                     raise ValueError("bad term on input:", str(token))
             elif isinstance(svalue, Rule):
-                # if token[1] in self.CHAR_TO_SPECIAL_TERM and self.CHAR_TO_SPECIAL_TERM[token[1]][0] in self.table[svalue]:
-                #     print("SPECIAL REPLACE")
-                #     token = self.CHAR_TO_SPECIAL_TERM[token[1]]
-                #
                 if svalue == NonTerminal.ESCAPE_TAIL:
                     if token[1] in self.ESCAPE_SPECIAL_CHARS:
                         if token[1] == 'u': #hex
@@ -414,10 +339,10 @@ class SyntaticalAnalysis():
                             token = (Terminal.ESCAPE_SPECIAL, token[1])
 
                 logger.debug(f"{svalue = !s}, {token = !s}")
-                if token[0] in self.table[svalue]:
-                    rule = self.table[svalue][token[0]]
-                elif token in self.table[svalue]:
+                if token in self.table[svalue]:
                     rule = self.table[svalue][token]
+                elif token[0] in self.table[svalue]:
+                    rule = self.table[svalue][token[0]]
                 else:
                     raise ValueError(f"no rule found: svalue: {str(svalue)} token: {str(token)}")
                 logger.debug(f"{rule = }")
@@ -439,7 +364,7 @@ class JSON_Parser():
 #logger.setLevel(logging.DEBUG)
 if __name__ =="__main__":
     # JSON_Parser.parse("""
-    # null
+    # "abc"
     # """)
     # sys.exit(0)
 
