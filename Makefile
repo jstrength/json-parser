@@ -9,6 +9,6 @@ parser:
 	python parse.py
 
 test:
-	python -m pytest test_parser.py
+	python -m pytest -v test_parser.py
 
 # end
