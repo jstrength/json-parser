@@ -2,7 +2,7 @@
 
 import pytest # type: ignore
 
-from parse import JSONParser
+from parser import JSONParser
 
 def test_string():
     json_example = """

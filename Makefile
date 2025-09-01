@@ -6,7 +6,7 @@
 all: parser
 
 parser:
-	python parse.py
+	python parser.py $(file)
 
 test:
 	python -m pytest -v test_parser.py
